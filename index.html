@@ -6,6 +6,8 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
  <title>Lector QR - Control de Activos</title>
  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+ <script src="https://accounts.google.com/gsi/client" async defer></script>
+
  <style>
   /* Reset y Estilos Base */
   * {
@@ -22,7 +24,6 @@
    height: 100vh;
    color: #333;
    transition: background-color 0.4s ease;
-   /* Transición suave de colores */
   }
 
   h1 {
@@ -34,7 +35,6 @@
    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   }
 
-  /* Contenedor Principal */
   .main-container {
    flex: 1;
    display: flex;
@@ -45,7 +45,28 @@
    gap: 20px;
   }
 
-  /* Contenedor de Video (Proporción ajustable) */
+  /* Contenedor de Autenticación */
+  #auth-container {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   gap: 15px;
+   background: white;
+   padding: 30px;
+   border-radius: 12px;
+   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+   text-align: center;
+  }
+
+  /* Contenedor de la aplicación (Oculto por defecto) */
+  #app-container {
+   display: none;
+   width: 100%;
+   flex-direction: column;
+   align-items: center;
+   gap: 20px;
+  }
+
   .video-wrapper {
    position: relative;
    width: 100%;
@@ -62,11 +83,9 @@
    width: 100%;
    height: auto;
    max-height: 55vh;
-   /* Evita que el video empuje los botones fuera de pantalla */
    object-fit: cover;
   }
 
-  /* Panel de Mensajes */
   #output {
    width: 100%;
    max-width: 450px;
@@ -84,7 +103,6 @@
    border: 1px solid #ddd;
   }
 
-  /* Grupo de Botones */
   .button-group {
    width: 100%;
    max-width: 450px;
@@ -125,7 +143,6 @@
    color: white;
   }
 
-  /* Ajustes para Tablets */
   @media (min-width: 768px) {
    h1 {
     font-size: 1.6rem;
@@ -157,15 +174,21 @@
 
  <div class="main-container">
 
-  <div class="video-wrapper">
-   <video id="video" autoplay playsinline></video>
+  <div id="auth-container">
+   <h3>Acceso Restringido</h3>
+   <p>Inicia sesión con tu cuenta de Grupo Trebol para continuar.</p>
+   <div id="buttonDiv"></div>
   </div>
 
-  <div id="output">Cargando cámara...</div>
-
-  <div class="button-group">
-   <button id="flashButton" disabled>Flash</button>
-   <button id="restartButton">Reanudar</button>
+  <div id="app-container">
+   <div class="video-wrapper">
+    <video id="video" autoplay playsinline></video>
+   </div>
+   <div id="output">Cargando cámara...</div>
+   <div class="button-group">
+    <button id="flashButton" disabled>Flash</button>
+    <button id="restartButton">Reanudar</button>
+   </div>
   </div>
 
  </div>
@@ -173,6 +196,17 @@
  <canvas id="canvas" hidden></canvas>
 
  <script>
+  // ⚠️ IMPORTANTE: REEMPLAZA ESTA URL CON LA DE TU NUEVA IMPLEMENTACIÓN DE APPS SCRIPT
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/TU_NUEVO_ID_DE_DESPLIEGUE/exec';
+
+  // DOMINIOS PERMITIDOS
+  const ALLOWED_DOMAINS = ['grupotrebol.net', 'tunuevodominio.com'];
+
+  let userEmail = "";
+  let escaneando = true;
+  let track = null;
+  const REQUIRED_PATTERNS = ['Activo:', 'id:', 'CompanyName:', 'AssetName:'];
+
   const video = document.getElementById('video');
   const canvasElement = document.getElementById('canvas');
   const canvas = canvasElement.getContext('2d');
@@ -180,25 +214,49 @@
   const flashButton = document.getElementById('flashButton');
   const restartButton = document.getElementById('restartButton');
 
-  let escaneando = true;
-  let track = null;
+  // Inicializar el botón de Google al cargar la página
+  window.onload = function () {
+   google.accounts.id.initialize({
+    // AQUÍ ESTÁ TU ID DE CLIENTE YA COLOCADO
+    client_id: "61770768985-8ecis178loc7m2jek98pdqftth6biaov.apps.googleusercontent.com",
+    callback: handleCredentialResponse
+   });
+   google.accounts.id.renderButton(
+    document.getElementById("buttonDiv"),
+    { theme: "outline", size: "large" }
+   );
+  }
 
-  // Reglas de validación
-  const REQUIRED_PATTERNS = ['Activo:', 'id:', 'CompanyName:', 'AssetName:'];
+  // Procesar respuesta del login
+  function handleCredentialResponse(response) {
+   const base64Url = response.credential.split('.')[1];
+   const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+   const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
+    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+   }).join(''));
+
+   const payload = JSON.parse(jsonPayload);
+   userEmail = payload.email;
+   const domain = userEmail.split('@')[1];
+
+   if (ALLOWED_DOMAINS.includes(domain)) {
+    document.getElementById('auth-container').style.display = 'none';
+    document.getElementById('app-container').style.display = 'flex';
+    startCamera();
+   } else {
+    alert("Acceso denegado. Dominio no autorizado.");
+    google.accounts.id.disableAutoSelect();
+   }
+  }
 
   async function startCamera() {
    try {
     const stream = await navigator.mediaDevices.getUserMedia({
-     video: {
-      facingMode: 'environment',
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-     }
+     video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
     video.srcObject = stream;
     track = stream.getVideoTracks()[0];
 
-    // Verificamos soporte de Flash (Torch)
     if (track && track.getCapabilities && 'torch' in track.getCapabilities()) {
      flashButton.disabled = false;
     } else {
@@ -208,7 +266,6 @@
     video.play();
     requestAnimationFrame(tick);
     output.innerText = 'Apunta a un código QR';
-
    } catch (err) {
     output.style.color = "red";
     output.innerText = 'Error: No se pudo acceder a la cámara. Revisa los permisos.';
@@ -231,68 +288,60 @@
      const isValid = REQUIRED_PATTERNS.every(pattern => rawData.includes(pattern));
 
      if (isValid) {
-      // FEEDBACK POSITIVO
-      document.body.style.backgroundColor = "#d4edda"; // Verde claro
+      document.body.style.backgroundColor = "#d4edda";
       output.style.color = "#155724";
       output.innerText = '✅ QR Válido. Enviando datos...';
-
-      // Si el móvil lo soporta, vibra 100ms
       if (navigator.vibrate) navigator.vibrate(100);
 
       sendDataToAppsScript(rawData);
      } else {
-      // FEEDBACK NEGATIVO
-      document.body.style.backgroundColor = "#f8d7da"; // Rojo claro
+      document.body.style.backgroundColor = "#f8d7da";
       output.style.color = "#721c24";
       output.innerText = '🚨 Código no reconocido como activo válido.';
-
       if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
      }
     }
    }
+   if (escaneando) { requestAnimationFrame(tick); }
+  }
 
-   if (escaneando) {
-    requestAnimationFrame(tick);
+  // Comunicación con el nuevo doPost de Apps Script
+  async function sendDataToAppsScript(datos) {
+   try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+     method: 'POST',
+     body: JSON.stringify({ qrData: datos, email: userEmail }),
+     headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+    });
+    const result = await response.json();
+
+    if (result.status === 'success') {
+     output.innerText = '✨ ¡Éxito! ' + result.message;
+    } else {
+     output.innerText = '🚨 Error en el servidor: ' + result.message;
+    }
+   } catch (err) {
+    console.error(err);
+    output.innerText = '🚨 Error de comunicación con Google Sheets.';
    }
   }
 
-  // Control del Flash
   flashButton.addEventListener('click', async () => {
    if (!track) return;
    try {
     const currentStatus = track.getSettings().torch || false;
-    await track.applyConstraints({
-     advanced: [{ torch: !currentStatus }]
-    });
+    await track.applyConstraints({ advanced: [{ torch: !currentStatus }] });
     flashButton.innerText = !currentStatus ? 'Apagar Flash' : 'Encender Flash';
-   } catch (e) {
-    console.error("Error con el flash:", e);
-   }
+   } catch (e) { console.error(e); }
   });
 
-  // Reanudar Escaneo
   restartButton.addEventListener('click', () => {
    escaneando = true;
-   document.body.style.backgroundColor = "#f4f4f9"; // Volver al gris original
+   document.body.style.backgroundColor = "#f4f4f9";
    output.style.color = "#333";
    output.innerText = 'Escaneando...';
    requestAnimationFrame(tick);
   });
-
-  // Comunicación con Google Apps Script
-  function sendDataToAppsScript(datos) {
-   google.script.run
-    .withSuccessHandler(function (res) {
-     output.innerText = '✨ ¡Éxito! ' + res;
-    })
-    .withFailureHandler(function (err) {
-     output.innerText = '🚨 Error en el servidor. Intenta de nuevo.';
-    })
-    .procesarResultadoQR(datos);
-  }
-
-  // Iniciar al cargar la ventana
-  window.addEventListener('load', startCamera);
  </script>
 </body>
 
