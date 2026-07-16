@@ -196,10 +196,10 @@
  <canvas id="canvas" hidden></canvas>
 
  <script>
-  const APPS_SCRIPT_URL = 'https://script.google.com/a/macros/grupotrebol.net/s/AKfycbwuojCYzMF1-VedC1-2pjz_1XwuSPqoTUXJWpdGN-pUCd4Oknq4dvDXl_30pt18a5EuhQ/exec';
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyJqv1y2lIj1NlFRx5tiTYiKxavVYNBO3ipx4BMhdr1hgjqfEkle7BjEyaV8VimKet_gw/exec';
 
   // DOMINIOS PERMITIDOS
-  const ALLOWED_DOMAINS = ['grupotrebol.net', 'tunuevodominio.com'];
+  const ALLOWED_DOMAINS = ['grupotrebol.net', 'trebol.com.mx'];
 
   let userEmail = "";
   let escaneando = true;
@@ -208,7 +208,7 @@
 
   const video = document.getElementById('video');
   const canvasElement = document.getElementById('canvas');
-  const canvas = canvasElement.getContext('2d');
+  const canvas = canvasElement.getContext('2d', { willReadFrequently: true });
   const output = document.getElementById('output');
   const flashButton = document.getElementById('flashButton');
   const restartButton = document.getElementById('restartButton');
